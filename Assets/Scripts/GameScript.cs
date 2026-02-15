@@ -71,19 +71,37 @@ public class GameScript : MonoBehaviour
         return slotList.Find(s => !s.isOccupied);
     }
 
+    private List<SlotScript> pendingSlotTransfers = new List<SlotScript>();
+
     private void TransferSlotsToPackage()
     {
         if (activeTargetPackage == null) return;
 
+        pendingSlotTransfers.Clear();
         foreach (var slot in slotList)
         {
+            if (slot.isOccupied)
+                pendingSlotTransfers.Add(slot);
+        }
+
+        SendNextSlotToPackage();
+    }
+
+    private void SendNextSlotToPackage()
+    {
+        if (activeTargetPackage == null) return;
+
+        while (pendingSlotTransfers.Count > 0)
+        {
+            SlotScript slot = pendingSlotTransfers[0];
+            pendingSlotTransfers.RemoveAt(0);
+
             if (!slot.isOccupied) continue;
 
             var comp = activeTargetPackage.compartments.Find(
                 c => c.color == slot.storedColor && !c.isFilled);
             if (comp != null && comp._compartment != null)
             {
-                // Spawn a whole block from slot to compartment
                 GridManager.Instance.wholeBlockWaitCount++;
                 GameObject wholeBlock = Instantiate(wholeBlockPrefab,
                     slot.transform.position, Quaternion.identity);
@@ -93,15 +111,16 @@ public class GameScript : MonoBehaviour
 
                 WholeBlockMover mover = wholeBlock.AddComponent<WholeBlockMover>();
                 mover.parentTransform = comp._compartment.transform;
-                mover.speed = wholeBlockLerpSpeed * 3f;
+                mover.speed = wholeBlockLerpSpeed;
                 mover.fillColor = slot.storedColor;
                 mover.ownerPackage = activeTargetPackage;
+                mover.onArrived = () => SendNextSlotToPackage();
 
-                // Destroy old block in slot and clear
                 if (slot.storedBlock != null)
                     Destroy(slot.storedBlock);
                 slot.storedBlock = null;
                 slot.isOccupied = false;
+                return; // wait for this one to arrive before sending next
             }
         }
     }
@@ -190,7 +209,7 @@ public class GameScript : MonoBehaviour
                     // Goes to compartment
                     WholeBlockMover mover = wholeBlock.AddComponent<WholeBlockMover>();
                     mover.parentTransform = dest;
-                    mover.speed = wholeBlockLerpSpeed * 3f;
+                    mover.speed = wholeBlockLerpSpeed;
                     mover.targetScript = targetScript;
                     mover.fillColor = collectedColor;
                     mover.ownerPackage = activeTargetPackage;
@@ -208,7 +227,7 @@ public class GameScript : MonoBehaviour
 
                         WholeBlockMover mover = wholeBlock.AddComponent<WholeBlockMover>();
                         mover.parentTransform = slot.settlePoint != null ? slot.settlePoint : slot.transform;
-                        mover.speed = wholeBlockLerpSpeed * 3f;
+                        mover.speed = wholeBlockLerpSpeed;
                         mover.targetScript = targetScript;
                         mover.fillColor = collectedColor;
                         mover.endY = 0.8f;

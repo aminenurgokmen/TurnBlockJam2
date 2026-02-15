@@ -47,6 +47,7 @@ public class WholeBlockMover : MonoBehaviour
             t += Time.deltaTime * speed;
             Vector3 target = new Vector3(0f, startY, 0f);
             transform.localPosition = Vector3.Lerp(startLocalPos, target, t);
+            transform.localRotation = Quaternion.Slerp(startLocalRot, Quaternion.identity, t);
 
             if (t >= 1f)
             {
