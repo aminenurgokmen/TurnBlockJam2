@@ -103,21 +103,17 @@ public class GameScript : MonoBehaviour
             if (comp != null && comp._compartment != null)
             {
                 GridManager.Instance.wholeBlockWaitCount++;
-                GameObject wholeBlock = Instantiate(wholeBlockPrefab,
-                    slot.transform.position, Quaternion.identity);
-                if (wholeBlock.transform.childCount > 0)
-                    wholeBlock.transform.GetChild(0).GetComponent<MeshRenderer>().material =
-                        AssignMaterial(slot.storedColor);
+                // Use the existing block sitting in the slot (already unparented)
+                GameObject wholeBlock = slot.storedBlock;
 
                 WholeBlockMover mover = wholeBlock.AddComponent<WholeBlockMover>();
                 mover.parentTransform = comp._compartment.transform;
                 mover.speed = wholeBlockLerpSpeed;
+                mover.waitDuration = 0f;
                 mover.fillColor = slot.storedColor;
                 mover.ownerPackage = activeTargetPackage;
                 mover.onArrived = () => SendNextSlotToPackage();
 
-                if (slot.storedBlock != null)
-                    Destroy(slot.storedBlock);
                 slot.storedBlock = null;
                 slot.isOccupied = false;
                 return; // wait for this one to arrive before sending next

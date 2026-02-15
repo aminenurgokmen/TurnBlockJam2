@@ -67,6 +67,9 @@ public class WholeBlockMover : MonoBehaviour
         if (t >= 1f)
         {
             transform.localPosition = new Vector3(0f, endY, 0f);
+            // Unparent only for waiting slots (not package compartments)
+            if (ownerPackage == null)
+                transform.SetParent(null);
             if (targetScript != null)
                 targetScript.Collect();
             if (ownerPackage != null)
