@@ -74,9 +74,26 @@ public class WholeBlockMover : MonoBehaviour
                 targetScript.Collect();
             if (ownerPackage != null)
             {
-                var ps = parentTransform.GetComponentInChildren<ParticleSystem>();
-                if (ps != null)
-                    ps.Play();
+                if (parentTransform.childCount > 0)
+                {
+                    var child0 = parentTransform.GetChild(0);
+                    var ps = child0.GetComponent<ParticleSystem>();
+                    if (ps != null)
+                        ps.Play();
+                }
+                if (parentTransform.childCount > 1)
+                {
+                    var child1 = parentTransform.GetChild(1);
+                    child1.gameObject.SetActive(true);
+                    var parentRenderer = parentTransform.GetComponent<MeshRenderer>();
+                    var child1Renderer = child1.GetComponent<MeshRenderer>();
+                    if (parentRenderer != null && child1Renderer != null)
+                    {
+                        Material[] parentMats = parentRenderer.materials;
+                        if (parentMats.Length > 1)
+                            child1Renderer.material = parentMats[1];
+                    }
+                }
                 parentTransform.GetComponent<AudioSource>()?.Play();    
                 ownerPackage.FillCompartment(fillColor);
             }
