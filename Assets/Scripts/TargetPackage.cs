@@ -93,7 +93,13 @@ public class TargetPackage : MonoBehaviour
 
     private void Exit()
     {
-        StartCoroutine(MoveX(targetX, 8f, true));
+        StartCoroutine(ExitAfterDelay(0.5f));
+    }
+
+    private IEnumerator ExitAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        yield return StartCoroutine(MoveX(targetX, 8f, true));
     }
 
     private IEnumerator MoveX(float fromX, float toX, bool destroyAfter = false)

@@ -10,6 +10,7 @@ public class CanvasManager : MonoBehaviour
 
     public CollectedUIScript collectedUIPrefab;
     public List<TargetScript> targetScripts;
+    public GameObject successPanel;
     void Awake()
     {
         Instance = this;

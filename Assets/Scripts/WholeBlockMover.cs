@@ -73,7 +73,13 @@ public class WholeBlockMover : MonoBehaviour
             if (targetScript != null)
                 targetScript.Collect();
             if (ownerPackage != null)
+            {
+                var ps = parentTransform.GetComponentInChildren<ParticleSystem>();
+                if (ps != null)
+                    ps.Play();
+                parentTransform.GetComponent<AudioSource>()?.Play();    
                 ownerPackage.FillCompartment(fillColor);
+            }
             onArrived?.Invoke();
             Destroy(this);
         }

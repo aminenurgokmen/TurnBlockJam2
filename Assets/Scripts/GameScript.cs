@@ -140,7 +140,10 @@ public class GameScript : MonoBehaviour
     public void SpawnNextPackage()
     {
         if (currentPackageIndex >= targetPackageDatas.Count)
+        {
+            CanvasManager.Instance.successPanel.SetActive(true);
             return;
+        }
 
         GameObject pkgObj = Instantiate(targetPackagePrefab, xPosition.position, xPosition.rotation);
         activeTargetPackage = pkgObj.GetComponent<TargetPackage>();
