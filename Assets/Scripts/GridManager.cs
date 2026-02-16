@@ -50,17 +50,21 @@ public class GridManager : MonoBehaviour
         colorGrid.Clear();
         foreach (var block in allBlocks)
         {
+            if (block == null) continue;
             var positions = block.GetOccupiedGridPositions();
-            for (int i = 0; i < positions.Length; i++)
+            int validCount = Mathf.Min(positions.Length, block.blockData.Count);
+            for (int i = 0; i < validCount; i++)
             {
+                if (block.blockData[i].part == null) continue;
                 colorGrid[positions[i]] = block.blockData[i].color;
             }
         }
-        // CheckAndSpawnAtTopIfEmpty(GameScript.Instance.blockPrefab);
     }
 
     public void UpdateColorGrid(Block block)
     {
+        if (block == null) return;
+
         foreach (var pos in block.GetOccupiedGridPositions())
         {
             if (colorGrid.ContainsKey(pos))
@@ -68,8 +72,10 @@ public class GridManager : MonoBehaviour
         }
 
         var positions = block.GetOccupiedGridPositions();
-        for (int i = 0; i < positions.Length; i++)
+        int validCount = Mathf.Min(positions.Length, block.blockData.Count);
+        for (int i = 0; i < validCount; i++)
         {
+            if (block.blockData[i].part == null) continue;
             colorGrid[positions[i]] = block.blockData[i].color;
         }
     }
@@ -152,10 +158,14 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        // === Hiç eşleşme yoksa sadece gravity uygula ===
+        // === Hiç eşleşme yoksa deadlock kontrolü yap ===
         if (singleColorMatches.Count == 0 && matches2x2.Count == 0)
         {
             ApplyGravityToEmptyBlocks();
+            if (!isMoving && allBlocks.Count >= 2 && !HasPossibleMatches())
+            {
+                StartCoroutine(ShuffleWithDelay());
+            }
             return;
         }
 
@@ -278,15 +288,39 @@ public class GridManager : MonoBehaviour
             List<(Block main, List<Block> others)> mergeGroups = new List<(Block, List<Block>)>();
             foreach (var kvp in groups)
             {
-                if (kvp.Key == null || kvp.Key.blockData.Count == 0) continue;
-                List<Block> validOthers = new List<Block>();
+                // Gruptaki tüm blokları topla
+                List<Block> allGroupBlocks = new List<Block>();
+                if (kvp.Key != null && kvp.Key.blockData.Count > 0)
+                    allGroupBlocks.Add(kvp.Key);
                 foreach (var other in kvp.Value)
                 {
                     if (other != null && other.blockData.Count > 0)
-                        validOthers.Add(other);
+                        allGroupBlocks.Add(other);
                 }
-                if (validOthers.Count > 0)
-                    mergeGroups.Add((kvp.Key, validOthers));
+
+                if (allGroupBlocks.Count < 2) continue;
+
+                // En alttaki (küçük Z) ve en soldaki (küçük X) blok main olsun
+                // Böylece üstteki aşağı, sağdaki sola kayar
+                Block mainBlock = allGroupBlocks[0];
+                for (int i = 1; i < allGroupBlocks.Count; i++)
+                {
+                    var candidate = allGroupBlocks[i];
+                    if (candidate.transform.position.z < mainBlock.transform.position.z ||
+                        (Mathf.Approximately(candidate.transform.position.z, mainBlock.transform.position.z) &&
+                         candidate.transform.position.x < mainBlock.transform.position.x))
+                    {
+                        mainBlock = candidate;
+                    }
+                }
+
+                List<Block> others = new List<Block>();
+                foreach (var b in allGroupBlocks)
+                {
+                    if (b != mainBlock)
+                        others.Add(b);
+                }
+                mergeGroups.Add((mainBlock, others));
             }
 
             if (mergeGroups.Count > 0)
@@ -671,6 +705,155 @@ public class GridManager : MonoBehaviour
 
         if (!IsGridFrozen)
             CheckForMatches(); // Kayma sonrası yeni match kontrolü
+    }
+
+    public bool HasPossibleMatchesPublic() => HasPossibleMatches();
+
+    private bool HasPossibleMatches()
+    {
+        List<Block> validBlocks = new List<Block>();
+        foreach (var block in allBlocks)
+        {
+            if (block != null && block.blockData.Count > 0)
+                validBlocks.Add(block);
+        }
+
+        // Her blok çifti için tüm rotasyon kombinasyonlarını dene
+        for (int a = 0; a < validBlocks.Count; a++)
+        {
+            for (int b = a; b < validBlocks.Count; b++)
+            {
+                Block blockA = validBlocks[a];
+                Block blockB = (a == b) ? null : validBlocks[b];
+
+                // rotA=0 ve rotB=0 (ikisi de dönmemiş) atla, mevcut durum zaten match değil
+                for (int rotA = 0; rotA <= 3; rotA++)
+                {
+                    int rotBStart = (a == b) ? rotA : 0; // tek blok kontrolü için
+                    for (int rotB = rotBStart; rotB <= 3; rotB++)
+                    {
+                        if (rotA == 0 && rotB == 0) continue;
+
+                        Dictionary<Vector2Int, ColorType> simGrid = new Dictionary<Vector2Int, ColorType>(colorGrid);
+
+                        // Block A'yı simüle et
+                        if (rotA > 0)
+                            ApplySimRotation(simGrid, blockA, rotA);
+
+                        // Block B'yi simüle et
+                        if (blockB != null && rotB > 0)
+                            ApplySimRotation(simGrid, blockB, rotB);
+
+                        if (SimGridHasMatch(simGrid))
+                            return true;
+                    }
+                    if (a == b) break; // tek blok, sadece rotA döngüsü yeter
+                }
+            }
+        }
+        return false;
+    }
+
+    private void ApplySimRotation(Dictionary<Vector2Int, ColorType> simGrid, Block block, int rot)
+    {
+        Vector3 blockCenter = block.transform.position;
+        var originalPositions = block.GetOccupiedGridPositions();
+
+        foreach (var pos in originalPositions)
+            simGrid.Remove(pos);
+
+        for (int i = 0; i < block.blockData.Count; i++)
+        {
+            if (block.blockData[i].part == null) continue;
+
+            Vector3 worldPos = block.blockData[i].part.transform.position;
+            float dx = worldPos.x - blockCenter.x;
+            float dz = worldPos.z - blockCenter.z;
+
+            float rdx = dx, rdz = dz;
+            for (int r = 0; r < rot; r++)
+            {
+                float tmp = rdx;
+                rdx = rdz;
+                rdz = -tmp;
+            }
+
+            int gx = Mathf.FloorToInt((blockCenter.x + rdx) / cellSize);
+            int gz = Mathf.FloorToInt((blockCenter.z + rdz) / cellSize);
+            simGrid[new Vector2Int(gx, gz)] = block.blockData[i].color;
+        }
+    }
+
+    private bool SimGridHasMatch(Dictionary<Vector2Int, ColorType> grid)
+    {
+        for (int x = 0; x < width - 1; x++)
+        {
+            for (int y = 0; y < height - 1; y++)
+            {
+                Vector2Int a = new Vector2Int(x, y);
+                Vector2Int b = new Vector2Int(x + 1, y);
+                Vector2Int c = new Vector2Int(x, y + 1);
+                Vector2Int d = new Vector2Int(x + 1, y + 1);
+
+                if (!grid.ContainsKey(a) || !grid.ContainsKey(b) ||
+                    !grid.ContainsKey(c) || !grid.ContainsKey(d))
+                    continue;
+
+                if (grid[a] == grid[b] && grid[b] == grid[c] && grid[c] == grid[d])
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private IEnumerator ShuffleWithDelay()
+    {
+        isMatchProcessing = true;
+
+        // Shuffle yazısını göster
+        if (CanvasManager.Instance.shuffleText != null)
+            CanvasManager.Instance.shuffleText.SetActive(true);
+
+        yield return new WaitForSeconds(1f);
+
+        // Shuffle yazısını kapat
+        if (CanvasManager.Instance.shuffleText != null)
+            CanvasManager.Instance.shuffleText.SetActive(false);
+
+        // Blokları yer değiştir
+        List<Block> validBlocks = new List<Block>();
+        foreach (var block in allBlocks)
+        {
+            if (block != null && block.blockData.Count > 0)
+                validBlocks.Add(block);
+        }
+
+        if (validBlocks.Count >= 2)
+        {
+            List<Vector3> positions = new List<Vector3>();
+            foreach (var block in validBlocks)
+                positions.Add(block.transform.position);
+
+            // Fisher-Yates shuffle
+            for (int i = positions.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                Vector3 temp = positions[i];
+                positions[i] = positions[j];
+                positions[j] = temp;
+            }
+
+            for (int i = 0; i < validBlocks.Count; i++)
+            {
+                validBlocks[i].transform.position = positions[i];
+            }
+
+            UpdateColorGridFromAll();
+            Debug.Log("Shuffle yapıldı - bloklar yer değiştirdi!");
+        }
+
+        isMatchProcessing = false;
+        CheckForMatches();
     }
 
 }

@@ -34,6 +34,8 @@ public class Block : MonoBehaviour
 
     void Update()
     {
+        // Destroy edilmiş part'ları temizle
+        blockData.RemoveAll(d => d.part == null);
         GridManager.Instance.UpdateColorGrid(this);
     }
 
@@ -80,6 +82,7 @@ public class Block : MonoBehaviour
         for (int i = 0; i < blockData.Count; i++)
         {
             var part = blockData[i].part;
+            if (part == null) continue;
             Vector3 worldPos = part.transform.position;
 
             int x = Mathf.FloorToInt(worldPos.x / cellSize);

@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
-using Microsoft.Unity.VisualStudio.Editor;
+//using Microsoft.Unity.VisualStudio.Editor;
 using UnityEngine;
 
 public class GameScript : MonoBehaviour
@@ -230,6 +230,14 @@ public class GameScript : MonoBehaviour
                         mover.targetScript = targetScript;
                         mover.fillColor = collectedColor;
                         mover.endY = 0.8f;
+                    }
+                    else
+                    {
+                        // Slot yok, package'da da yer yok → Fail
+                        Destroy(wholeBlock);
+                        GridManager.Instance.wholeBlockWaitCount--;
+                        CanvasManager.Instance.failPanel.SetActive(true);
+                        return;
                     }
                 }
             }
